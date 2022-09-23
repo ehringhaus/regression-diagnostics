@@ -1,30 +1,152 @@
 ---
-title: "Untitled"
+title: Module 1 — Regression Diagnostics with R
+author: Justin Ehringhaus
+date: September 23, 2022
 output: github_document
+bibliography: "references.bib"
+nocite: '@*'
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## GitHub Documents
-
-This is an R Markdown format used for publishing markdown documents to GitHub. When you click the **Knit** button all R code chunks are run and a markdown file (.md) suitable for publishing to GitHub is generated.
-
-## Including Code
-
-You can include R code in the document as follows:
-
-```{r cars}
-summary(cars)
+```{r}
+# ░░███╗░░
+# ░████║░░
+# ██╔██║░░
+# ╚═╝██║░░
+# ███████╗
+# ╚══════╝
+# Load the Ames housing dataset.
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+# ██████╗░
+# ╚════██╗
+# ░░███╔═╝
+# ██╔══╝░░
+# ███████╗
+# ╚══════╝
+# Perform Exploratory Data Analysis and use descriptive statistics to describe the data.
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+# ██████╗░
+# ╚════██╗
+# ░█████╔╝
+# ░╚═══██╗
+# ██████╔╝
+# ╚═════╝░
+# Prepare the dataset for modeling by imputing missing values with the variable's mean value or any other value that you prefer.
+```
+
+```{r}
+# ░░██╗██╗
+# ░██╔╝██║
+# ██╔╝░██║
+# ███████║
+# ╚════██║
+# ░░░░░╚═╝
+# Use the "cor()" function to produce a correlation matrix of the numeric values.
+```
+
+```{r}
+# ███████╗
+# ██╔════╝
+# ██████╗░
+# ╚════██╗
+# ██████╔╝
+# ╚═════╝░
+# Produce a plot of the correlation matrix, and explain how to interpret it. (hint - check the corrplot or ggcorrplot plot libraries)
+```
+
+```{r}
+# ░█████╗░
+# ██╔═══╝░
+# ██████╗░
+# ██╔══██╗
+# ╚█████╔╝
+# ░╚════╝░
+# Make a scatter plot for the X continuous variable with the highest correlation with SalePrice. Do the same for the X variable that has the lowest correlation with SalePrice. Finally, make a scatter plot between X and SalePrice with the correlation closest to 0.5. Interpret the scatter plots and describe how the patterns differ.
+```
+
+```{r}
+# ███████╗
+# ╚════██║
+# ░░░░██╔╝
+# ░░░██╔╝░
+# ░░██╔╝░░
+# ░░╚═╝░░░
+# Using at least 3 continuous variables, fit a regression model in R.
+```
+
+```{r}
+# ░█████╗░
+# ██╔══██╗
+# ╚█████╔╝
+# ██╔══██╗
+# ╚█████╔╝
+# ░╚════╝░
+# Report the model in equation form and interpret each coefficient of the model in the context of this problem.
+```
+
+```{r}
+# ░█████╗░
+# ██╔══██╗
+# ╚██████║
+# ░╚═══██║
+# ░█████╔╝
+# ░╚════╝░
+# Use the "plot()" function to plot your regression model. Interpret the four graphs that are produced.
+```
+
+```{r}
+# ░░███╗░░░█████╗░
+# ░████║░░██╔══██╗
+# ██╔██║░░██║░░██║
+# ╚═╝██║░░██║░░██║
+# ███████╗╚█████╔╝
+# ╚══════╝░╚════╝░
+# Check your model for multicollinearity and report your findings. What steps would you take to correct multicollinearity if it exists?
+```
+
+```{r}
+# ░░███╗░░░░███╗░░
+# ░████║░░░████║░░
+# ██╔██║░░██╔██║░░
+# ╚═╝██║░░╚═╝██║░░
+# ███████╗███████╗
+# ╚══════╝╚══════╝
+# Check your model for outliers and report your findings. Should these observations be removed from the model?
+```
+
+```{r}
+# ░░███╗░░██████╗░
+# ░████║░░╚════██╗
+# ██╔██║░░░░███╔═╝
+# ╚═╝██║░░██╔══╝░░
+# ███████╗███████╗
+# ╚══════╝╚══════╝
+# Attempt to correct any issues that you have discovered in your model. Did your changes improve the model, why or why not?
+```
+
+```{r}
+# ░░███╗░░██████╗░
+# ░████║░░╚════██╗
+# ██╔██║░░░█████╔╝
+# ╚═╝██║░░░╚═══██╗
+# ███████╗██████╔╝
+# ╚══════╝╚═════╝░
+# Use the all subsets regression method to identify the "best" model. State the preferred model in equation form.
+```
+
+```{r}
+# ░░███╗░░░░██╗██╗
+# ░████║░░░██╔╝██║
+# ██╔██║░░██╔╝░██║
+# ╚═╝██║░░███████║
+# ███████╗╚════██║
+# ╚══════╝░░░░░╚═╝
+# Compare the preferred model from step 13 with your model from step 12. How do they differ? Which model do you prefer and why?
+```
