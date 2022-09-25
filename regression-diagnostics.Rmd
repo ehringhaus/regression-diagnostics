@@ -7,8 +7,36 @@ bibliography: "references.bib"
 nocite: '@*'
 ---
 
+```{r}
+# clear console
+cat("\014")
+# clear global environment
+rm(list = ls())
+# clear plots
+try(dev.off(dev.list()["RStudioGD"]), silent = TRUE)
+# clear packages
+try(p_unload(p_loaded(), character.only = TRUE), silent = TRUE)
+# disables scientific notion for entire R session
+options(scipen = 100)
+```
+
 ```{r setup, include=FALSE}
+# repo: https://github.com/ehringhaus/regression-diagnostics
 knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# █▀█ ▄▀█ █▀▀ █▄▀ ▄▀█ █▀▀ █▀▀ █▀
+# █▀▀ █▀█ █▄▄ █░█ █▀█ █▄█ ██▄ ▄█
+library(pacman)
+p_load(tidyverse)     # the usual suite of packages
+p_load(skimr)         # alternative to summary(), skims dataset: skim()
+p_load(corrplot)      # visualization of a correlation matrix: corrplot()
+p_load(ggthemes)      # extra ggplot themes
+p_load(equatiomatic)  # extract equation from model
+p_load(car)           # Companion to Applied Regression
+p_load(leaps)         # 
+p_load(gvlma)         #
 ```
 
 ```{r}
@@ -19,6 +47,9 @@ knitr::opts_chunk$set(echo = TRUE)
 # ███████╗
 # ╚══════╝
 # Load the Ames housing dataset.
+
+ames <- read_csv("AmesHousing.csv")
+head(ames)[,1:6]
 ```
 
 ```{r}
@@ -28,7 +59,12 @@ knitr::opts_chunk$set(echo = TRUE)
 # ██╔══╝░░
 # ███████╗
 # ╚══════╝
-# Perform Exploratory Data Analysis and use descriptive statistics to describe the data.
+# Perform Exploratory Data Analysis 
+# and use descriptive statistics to describe the data.
+
+ames_numeric <- ames %>% select(names(which(lapply(ames, class) == "numeric")))
+myskim <- skim(ames_numeric)
+skim(ames_numeric)
 ```
 
 ```{r}
@@ -38,7 +74,19 @@ knitr::opts_chunk$set(echo = TRUE)
 # ░╚═══██╗
 # ██████╔╝
 # ╚═════╝░
-# Prepare the dataset for modeling by imputing missing values with the variable's mean value or any other value that you prefer.
+# Prepare the dataset for modeling by imputing missing values 
+# with the variable's mean value or any other value that you prefer.
+
+missinginess <- function(data) {
+  myskim <- skim(data)
+  tibble(attr = myskim$skim_variable, 
+         mean = round(myskim$numeric.mean, 2),
+         missing = 100 - round(myskim$complete_rate * 100, 2))
+}
+
+missinginess(ames_numeric)
+ames_numeric <- ames_numeric %>% replace_na(., lapply(., mean, na.rm = TRUE))
+missinginess(ames_numeric)
 ```
 
 ```{r}
@@ -49,6 +97,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # ╚════██║
 # ░░░░░╚═╝
 # Use the "cor()" function to produce a correlation matrix of the numeric values.
+ames_corrmtrx <- cor(ames_numeric)
 ```
 
 ```{r}
@@ -58,7 +107,15 @@ knitr::opts_chunk$set(echo = TRUE)
 # ╚════██╗
 # ██████╔╝
 # ╚═════╝░
-# Produce a plot of the correlation matrix, and explain how to interpret it. (hint - check the corrplot or ggcorrplot plot libraries)
+# Produce a plot of the correlation matrix, and explain how to interpret it.
+corrplot(ames_corrmtrx, 
+         title = "Correlation Plot - Numeric Attributes in Ames Dataset",
+         type = c("lower"),
+         mar= c(0, 0, 2, 0),
+         method = "circle", 
+         insig = "blank", 
+         diag = FALSE,
+         tl.cex = 0.5)
 ```
 
 ```{r}
@@ -69,6 +126,35 @@ knitr::opts_chunk$set(echo = TRUE)
 # ╚█████╔╝
 # ░╚════╝░
 # Make a scatter plot for the X continuous variable with the highest correlation with SalePrice. Do the same for the X variable that has the lowest correlation with SalePrice. Finally, make a scatter plot between X and SalePrice with the correlation closest to 0.5. Interpret the scatter plots and describe how the patterns differ.
+
+# Scatter plot for SalePrice with undefined 'x'
+scatter.plot.x.vs.SalePrice <- function(x) {
+  ames_numeric %>% 
+    ggplot() +
+    aes(x = .data[[x]], y = `SalePrice`) +
+    geom_point() +
+    theme_tufte() +
+    ggtitle(paste0("SalePrice vs. ", x))
+}
+
+# Attributes' correlation coefficient with SalePrice, not including SalePrice
+SalesPrice.cors <- sort(ames_corrmtrx[, 'SalePrice'], decreasing = TRUE)[-1]
+SalesPrice.cors
+
+# The attribute with the highest correlation to SalePrice
+highest.cor <- names(head(SalesPrice.cors, n = 1))
+# Plotting highest correlated attribute to SalePrice
+scatter.plot.x.vs.SalePrice(highest.cor)
+
+# The attribute with the lowest correlation to SalePrice
+lowest.cor <- names(tail(SalesPrice.cors, n = 1))
+# Plotting lowest correlated attribute to SalePrice
+scatter.plot.SalePrice(lowest.cor)
+
+# The attribute with the closest correlation to 0.5
+middle.cor <- names(SalesPrice.cors[which.min(abs(SalesPrice.cors - 0.5))])
+# Plotting middling correlated attribute to SalePrice
+scatter.plot.SalePrice(middle.cor)
 ```
 
 ```{r}
@@ -79,6 +165,10 @@ knitr::opts_chunk$set(echo = TRUE)
 # ░░██╔╝░░
 # ░░╚═╝░░░
 # Using at least 3 continuous variables, fit a regression model in R.
+SalePrice.top3.cor <- head(SalesPrice.cors, n = 3)
+
+myfit <- lm(`SalePrice` ~ ., 
+            select(ames_numeric, `SalePrice`, names(SalePrice.top3.cor)))
 ```
 
 ```{r}
@@ -89,6 +179,8 @@ knitr::opts_chunk$set(echo = TRUE)
 # ╚█████╔╝
 # ░╚════╝░
 # Report the model in equation form and interpret each coefficient of the model in the context of this problem.
+extract_eq(myfit, wrap = TRUE, use_coefs = TRUE)
+summary(myfit)
 ```
 
 ```{r}
@@ -99,6 +191,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # ░█████╔╝
 # ░╚════╝░
 # Use the "plot()" function to plot your regression model. Interpret the four graphs that are produced.
+plot(myfit)
 ```
 
 ```{r}
@@ -109,6 +202,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # ███████╗╚█████╔╝
 # ╚══════╝░╚════╝░
 # Check your model for multicollinearity and report your findings. What steps would you take to correct multicollinearity if it exists?
+sqrt(vif(myfit)) > 2
 ```
 
 ```{r}
@@ -119,6 +213,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # ███████╗███████╗
 # ╚══════╝╚══════╝
 # Check your model for outliers and report your findings. Should these observations be removed from the model?
+influencePlot(myfit)
 ```
 
 ```{r}
@@ -129,6 +224,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # ███████╗███████╗
 # ╚══════╝╚══════╝
 # Attempt to correct any issues that you have discovered in your model. Did your changes improve the model, why or why not?
+gvlma(myfit)
 ```
 
 ```{r}
@@ -139,6 +235,15 @@ knitr::opts_chunk$set(echo = TRUE)
 # ███████╗██████╔╝
 # ╚══════╝╚═════╝░
 # Use the all subsets regression method to identify the "best" model. State the preferred model in equation form.
+
+myleaps <- regsubsets(`SalePrice`~., 
+                      data = select(ames_numeric, `SalePrice`, names(SalePrice.top3.cor)),
+                      nbest = 1)
+summary(myleaps)
+plot(myleaps, scale = "adjr2")
+  
+  # , data, nbest) + plot(leaps, scale=“adjr2”) to compare all subsets, preferred over stepwise so long as compute time is not an issue as it’ll compare all possible models
+
 ```
 
 ```{r}
