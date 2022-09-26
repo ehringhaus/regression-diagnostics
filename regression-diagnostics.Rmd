@@ -1,13 +1,35 @@
 ---
 title: Module 1 — Regression Diagnostics with R
-author: Justin Ehringhaus
-date: September 23, 2022
-output: github_document
+author: "Justin Ehringhaus"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  github_document:
+    toc: true
+    toc_depth: 5
 bibliography: "references.bib"
 nocite: '@*'
 ---
 
+```{r setup, include=FALSE}
+# repo: https://github.com/ehringhaus/regression-diagnostics
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+---
+
+## Introduction
+
+This assignment explores multiple linear regression and regression diagnostics using a dataset on residential properties sold between 2006 to 2010 in Ames, Iowa. The Ames dataset contains 2930 observations and 82 variables, including features such as year sold, neighborhood name, type of foundation, electrical system, sale price, and many more. The original dataset was assembled by the Ames Assessor's Office for tax assessment purposes but its variables closely match what a typical homebuyer might want to know prior to purchasing a house, and thus this dataset can be used to make useful predictions that could benefit real estate agents or homebuyers such as predicting the best price of a home given certain features.
+
+To simplify the analysis, in this assignment I am concerned only with ordinal or discrete numeric variables (i.e., non-nominal and non-character variables), but it should be noted that a fuller analysis could recode nominal, character variables and include them in the linear regression models.
+
+I will first perform an exploratory data analysis, including an evaluation of "missingness," to understand the general shape of the dataset and to fill in the blanks where missing data is present. Next, I will consider what variables to include as predictor variables in the multiple linear regression by assessing the strengths of correlations of each to the `SalePrice` variable. My purpose, here, is to understand what variables have the greatest predictive powers when regressing onto the outcome variable, `SalePrice`. After having built an initial model using those selected variables, I will diagnose and attempt to improve the model by assessing linear model assumptions such as its normality, nonlinearity, homoscedasticity, and multicollinearity. These terms will be defined and explored further in the following analysis. Finally, I will reflect on whether my regression diagnostics have led to an improved model.
+
+---
+
 ```{r}
+# █▀█ █▀▀ █▀ █▀▀ ▀█▀ █▀
+# █▀▄ ██▄ ▄█ ██▄ ░█░ ▄█
 # clear console
 cat("\014")
 # clear global environment
@@ -20,94 +42,120 @@ try(p_unload(p_loaded(), character.only = TRUE), silent = TRUE)
 options(scipen = 100)
 ```
 
-```{r setup, include=FALSE}
-# repo: https://github.com/ehringhaus/regression-diagnostics
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 ```{r}
 # █▀█ ▄▀█ █▀▀ █▄▀ ▄▀█ █▀▀ █▀▀ █▀
 # █▀▀ █▀█ █▄▄ █░█ █▀█ █▄█ ██▄ ▄█
 library(pacman)
 p_load(tidyverse)     # the usual suite of packages
-p_load(skimr)         # alternative to summary(), skims dataset: skim()
-p_load(corrplot)      # visualization of a correlation matrix: corrplot()
+p_load(skimr)         # alternative to summary(), skims dataset
+p_load(corrplot)      # visualization of a correlation matrix
 p_load(ggthemes)      # extra ggplot themes
 p_load(equatiomatic)  # extract equation from model
 p_load(car)           # Companion to Applied Regression
-p_load(leaps)         # 
-p_load(gvlma)         #
+p_load(leaps)         # exhaustive search of best model(s)
+p_load(gvlma)         # assessment of linear models assumptions
+p_load(VIM)           # visualization of missing values
 ```
 
+---
+
+## Analysis
+
+#### Importing and Previewing the Dataset
+
+To begin, I will load the dataset as a tibble and confirm its successful importation by using the `head()` function to view the first few rows and slicing the result to check the first few columns.
+
 ```{r}
-# ░░███╗░░
+# ░░███╗░░Load the Ames housing dataset.
 # ░████║░░
 # ██╔██║░░
 # ╚═╝██║░░
 # ███████╗
 # ╚══════╝
-# Load the Ames housing dataset.
-
+# reading csv into tibble
 ames <- read_csv("AmesHousing.csv")
+# checking first few rows/cols for successful import
 head(ames)[,1:6]
 ```
 
+As explained in the introduction, I will only include numeric variables and drop all others. The `skim()` function from the skimr package provides a more in-depth version of the base `summary()` function. In it, we see there is some *missingness* (i.e., missing values are present and the completion rate is not 100%).
+
+The histograms also reveal that there is left or right skewness present in many of the variables. This is expected as most features in this dataset such as `Garage Area` have similar values falling predominantly on one end of the curve with some outliers on the other end of the curve. On the other hand, instances where there is little to no skewness such as in `Overall Qual` show how the majority of values fall in the middle (i.e., decent quality) with some outliers being very good or very bad.
+
 ```{r}
-# ██████╗░
-# ╚════██╗
+# ██████╗░Perform Exploratory Data Analysis 
+# ╚════██╗and use descriptive statistics to describe the data.
 # ░░███╔═╝
 # ██╔══╝░░
 # ███████╗
 # ╚══════╝
-# Perform Exploratory Data Analysis 
-# and use descriptive statistics to describe the data.
-
+# separately saving variables with a class type of "numeric"
 ames_numeric <- ames %>% select(names(which(lapply(ames, class) == "numeric")))
-myskim <- skim(ames_numeric)
-skim(ames_numeric)
+# checking the shape and summary of the dataset
+myskim <- skim(ames_numeric) %>% select(-starts_with('numeric.p'))
+myskim
 ```
 
+Another way to assess missingness is the `aggr()` function from the VIM package, which reveals variables in terms of the count of missing values (left plot) and the combinations variables with missing values (right plot). We can see the majority of missing values `Lot Frontage` variable, which measures the linear feet of street connected to the property. Overall, the mean completion rate is `r mean(myskim$complete_rate)`, which shows that "missingness" is not a major issue in this dataset.
+
 ```{r}
-# ██████╗░
-# ╚════██╗
+par(oma=c(0,0,2,0))
+plot(aggr(ames_numeric, plot = FALSE), 
+     numbers = TRUE, 
+     cex.axis = .3, 
+     prop = FALSE)
+title("Missingness in Ames Dataset", outer = TRUE)
+```
+
+#### Imputing Missing Values
+
+To prepare the dataset for modeling, missing values may not be present. I will opt to impute missing values using the variables' mean value. The custom `missingness` function below yields a tibble with any variables containing missing values and their respective percentage of missingness both prior to, and after, imputing the missing values with column means. Before imputing, there are 11 variables containing some degree of missingness, and after imputing there are zero (an empty tibble).
+
+```{r}
+# ██████╗░Prepare the dataset for modeling by imputing missing values 
+# ╚════██╗with the variable's mean value or any other value that you prefer.
 # ░█████╔╝
 # ░╚═══██╗
 # ██████╔╝
 # ╚═════╝░
-# Prepare the dataset for modeling by imputing missing values 
-# with the variable's mean value or any other value that you prefer.
-
+# returns tibble containing variables with percentage of missing data
 missinginess <- function(data) {
   myskim <- skim(data)
   tibble(attr = myskim$skim_variable, 
-         mean = round(myskim$numeric.mean, 2),
-         missing = 100 - round(myskim$complete_rate * 100, 2))
+         missing = 100 - round(myskim$complete_rate * 100, 2)) %>% 
+  filter(missing > 0)
 }
 
 missinginess(ames_numeric)
+# imputing missing data with column means
 ames_numeric <- ames_numeric %>% replace_na(., lapply(., mean, na.rm = TRUE))
 missinginess(ames_numeric)
 ```
 
+#### Correlations with SalePrice
+
+In the next step, I will begin assessing correlation coefficients by first producing a correlation matrix using the `cor()` function.
+
 ```{r}
-# ░░██╗██╗
-# ░██╔╝██║
+# ░░██╗██╗Use the "cor()" function to produce a
+# ░██╔╝██║correlation matrix of the numeric values.
 # ██╔╝░██║
 # ███████║
 # ╚════██║
 # ░░░░░╚═╝
-# Use the "cor()" function to produce a correlation matrix of the numeric values.
 ames_corrmtrx <- cor(ames_numeric)
 ```
 
+The correlation plot below built with the `corrplot()` function reveals positive and negative correlations by color (blue to red, respectively). As I will be building models containing `SalePrice` as the outcome variable, I am most concerned with variables that are strongly correlated (either positively or negatively) with `SalePrice` in the final row of the correlation plot below.
+
 ```{r}
-# ███████╗
-# ██╔════╝
+# ███████╗Produce a plot of the correlation matrix,
+# ██╔════╝and explain how to interpret it.
 # ██████╗░
 # ╚════██╗
 # ██████╔╝
 # ╚═════╝░
-# Produce a plot of the correlation matrix, and explain how to interpret it.
+# correlation plot
 corrplot(ames_corrmtrx, 
          title = "Correlation Plot - Numeric Attributes in Ames Dataset",
          type = c("lower"),
@@ -118,17 +166,19 @@ corrplot(ames_corrmtrx,
          tl.cex = 0.5)
 ```
 
+#### Plotting Against SalePrice
+
+The custom `scatter.plot.SalePrice.vs()` function pre-populates a scatter plot with the Y-variable `SalePrice` (the eventual outcome variable) and a user-selected X-variable. Below, I select and save variables that have the highest, lowest, and medium correlation coefficients with `SalePrice`, and demonstrate scatter plots for each of these.
+
 ```{r}
-# ░█████╗░
-# ██╔═══╝░
-# ██████╗░
-# ██╔══██╗
+# ░█████╗░Make a scatter plot for the X continuous variable
+# ██╔═══╝░with the highest, lowest, and middling (closest to 0.5)
+# ██████╗░correlation with SalePrice.
+# ██╔══██╗Interpret the scatter plots and describe how the patterns differ.
 # ╚█████╔╝
 # ░╚════╝░
-# Make a scatter plot for the X continuous variable with the highest correlation with SalePrice. Do the same for the X variable that has the lowest correlation with SalePrice. Finally, make a scatter plot between X and SalePrice with the correlation closest to 0.5. Interpret the scatter plots and describe how the patterns differ.
-
 # Scatter plot for SalePrice with undefined 'x'
-scatter.plot.x.vs.SalePrice <- function(x) {
+scatter.plot.SalePrice.vs <- function(x) {
   ames_numeric %>% 
     ggplot() +
     aes(x = .data[[x]], y = `SalePrice`) +
@@ -137,121 +187,188 @@ scatter.plot.x.vs.SalePrice <- function(x) {
     ggtitle(paste0("SalePrice vs. ", x))
 }
 
-# Attributes' correlation coefficient with SalePrice, not including SalePrice
-SalesPrice.cors <- sort(ames_corrmtrx[, 'SalePrice'], decreasing = TRUE)[-1]
+# abs() of variables' correlation coefficient with SalePrice (minus SalesPrice)
+SalesPrice.cors <- sort(abs(ames_corrmtrx[, 'SalePrice']), decreasing = TRUE)[-1]
 SalesPrice.cors
-
-# The attribute with the highest correlation to SalePrice
-highest.cor <- names(head(SalesPrice.cors, n = 1))
-# Plotting highest correlated attribute to SalePrice
-scatter.plot.x.vs.SalePrice(highest.cor)
-
-# The attribute with the lowest correlation to SalePrice
-lowest.cor <- names(tail(SalesPrice.cors, n = 1))
-# Plotting lowest correlated attribute to SalePrice
-scatter.plot.SalePrice(lowest.cor)
-
-# The attribute with the closest correlation to 0.5
-middle.cor <- names(SalesPrice.cors[which.min(abs(SalesPrice.cors - 0.5))])
-# Plotting middling correlated attribute to SalePrice
-scatter.plot.SalePrice(middle.cor)
 ```
 
+The scatter plot of the variable with the highest correlation to `SalePrice` is `Overall Qual`. It is left skewed and the ranges of values from minimum to maximum increase as the value on the X-axis increases. This suggests that homes with higher quality materials have a less predictable, more varied `SalePrice`, whereas homes with lower quality materials are more standardized in terms of `SalePrice`.
+
+The scatter plot of the variable with the lowest correlation to `SalePrice` is `BsmtFin SF 2`, which measures the square footage of Type 2 basements. It has many zero-values, likely because many homes do not have, or were not assessed, for type 2 basements and left unmeasured. Interestingly, `SalePrice` appears rather consistent irrespective of the square footage of the basement. I would expect basement square footage mirrors property square footage and that more square footage relates to higher `SalePrice`, but this scatter plot shows consistency, which makes me question whether the collectors of this data did a good job at measuring basement square footage.
+
+The scatter plot of the variable with a medium correlation to `SalePrice` is `TotRmsAbvGrd`, which measures the total rooms above grade/ground. Values are more sparse on the right-end (houses with many rooms) and the ranges of values from minimum to maximum are difficult to discern as the value on the X-axis increases. This suggests that homes with more rooms above ground may or may not have a predictable `SalePrice` but homes with few rooms above ground seem to have a predicabtly more standardized `SalePrice` (thus the medium-level of correlation).
+
 ```{r}
-# ███████╗
+# The variable with the highest correlation to SalePrice
+highest.cor <- names(head(SalesPrice.cors, n = 1))
+# Plotting highest correlated variable to SalePrice
+scatter.plot.SalePrice.vs(highest.cor)
+
+# The variable with the lowest correlation to SalePrice
+lowest.cor <- names(tail(SalesPrice.cors, n = 1))
+# Plotting lowest correlated variable to SalePrice
+scatter.plot.SalePrice.vs(lowest.cor)
+
+# The variable with the closest correlation to 0.5
+medium.cor <- names(SalesPrice.cors[which.min(abs(SalesPrice.cors - 0.5))])
+# Plotting middling correlated variable to SalePrice
+scatter.plot.SalePrice.vs(medium.cor)
+```
+
+#### Modeling: Multiple Linear Regression
+
+Taking the top three variables with the strongest correlations (either positive or negative) to `SalePrice`, in this next section I build a multiple linear regression model using the default settings and without any transformations.
+
+```{r}
+# ███████╗Using at least 3 continuous variables, fit a regression model in R.
 # ╚════██║
 # ░░░░██╔╝
 # ░░░██╔╝░
 # ░░██╔╝░░
 # ░░╚═╝░░░
-# Using at least 3 continuous variables, fit a regression model in R.
-SalePrice.top3.cor <- head(SalesPrice.cors, n = 3)
+# Top three variables with strongest correlation with SalePrice 
+top3.cor <- head(abs(SalesPrice.cors), n = 3)
 
+# Regressing the top three correlated variables onto SalePrice 
 myfit <- lm(`SalePrice` ~ ., 
-            select(ames_numeric, `SalePrice`, names(SalePrice.top3.cor)))
+            select(ames_numeric, `SalePrice`, names(top3.cor)))
 ```
 
+The `extract_eq()` function is useful for extracting the LaTeX code for a given model, and in this case it shows the equation used to predict `SalePrice` given the Y-intercept and slope coefficients.
+
+The predictor variables are `Overall Qual` (measures overall quality of the home), `Gr Liv Area` (measures the square footage of liveable area above grade/ground), and `Garage Cars` (measures the size of the garage in terms of car capacity). `Overall Qual` has the highest coefficient, which makes sense as the quality of materials are intuitively strong predictors of value. `Gr Liv Area` has the lowest coefficient, but the unit is square feet as opposed to an ordinal value of 1-10 like in `Overall Qual`. As such, it would be a good idea to scale the predictor variables to standardize them to a mean of zero for purposes of easier interpretation as it is currently difficult to judge to what extent each predictor contributes to the outcome.
+
 ```{r}
-# ░█████╗░
-# ██╔══██╗
+# ░█████╗░Report the model in equation form and interpret each coefficient of
+# ██╔══██╗the model in the context of this problem.
 # ╚█████╔╝
 # ██╔══██╗
 # ╚█████╔╝
 # ░╚════╝░
-# Report the model in equation form and interpret each coefficient of the model in the context of this problem.
+# LaTeX for fitted model in equation form
 extract_eq(myfit, wrap = TRUE, use_coefs = TRUE)
+# summary of the fitted model
 summary(myfit)
 ```
 
+#### Diagnostics: Multiple Linear Regression
+
+**Normality** assumes that if the outcome variable `SalePrice` is normally distributed for the predictor variables, then the residual values will also be normally distributed with a mean of zero. The Normal Q-Q plot (upper-right) shows a non-normal distribution as residuals do not follow the line at the outer ends. Thus, the normality assumption has been violated. Because of this, I may want to investigate observations 2182, 2181, and 1499 as they have been marked as influential points. 
+
+**Independence** assumes that predictor values are independent of one-another. As an example, if the `Overall Qual` of one home influences that of another home directly, then the independence assumption would be violated. This has to do with data collection methods, as choosing homes all in the same neighborhood might lead to variables that are more dependent on one-another. Materials chosen to build homes in one neighborhood, for instance, might be similar for corporate reasons as the same real estate agency might own all the properties in that area. However, if properties in the dataset were selected through random sampling methods, then the chance of violating the independence assumption would be lower.
+
+**Linearity** assumes that the outcome variable is linearly related to the predictor variables, and thus there should be no obvious patterns between the residual and fitted values. The Residuals vs. Fitted plot (upper-left) shows a slight curve, suggesting there is a pattern. Thus, it may be necessary to add a curvilinear component such as a polynomial term or a log transformation. Or, it might be necessary to use a regression variant if linear regression is not the most suitable given the outcome and predictor variables.
+
+**Homoscedasticity** assumes that variance is constant, and the band of points around the line on the Scale-Location plot (bottom-left) should appear random. They do appear so, and thus the homoscedasticity assumption likely has not been violated.
+
+Finally, the Residuals vs. Leverage plot (bottom-right) identifies outliers, high leverage points, and influential points that may merit further inquiry. These are observations that should be examined further, and possibly dropped, depending on whether the data is atypical or erroneous. However, caution should be taken when dropping data, as it is not a good idea to alter the data to fit the model.
+
 ```{r}
-# ░█████╗░
-# ██╔══██╗
+# ░█████╗░Use the "plot()" function to plot your regression model.
+# ██╔══██╗Interpret the four graphs that are produced.
 # ╚██████║
 # ░╚═══██║
 # ░█████╔╝
 # ░╚════╝░
-# Use the "plot()" function to plot your regression model. Interpret the four graphs that are produced.
+# The basic diagnostic plots using built-in plot() function with fitted model
+par(mfrow = c(2, 2))
 plot(myfit)
 ```
 
+**Multicollinearity** is a problem occurring when predictor variables are correlated, which results in less reliable predictions as one predictor already can accurately predict another predictor. The `vif()` function from the car package outputs a statistic for detecting the likelihood of multicollinearity problems, and the output below shows multicollinearity is likely not a problem for these particular predictors. If it were a problem, the best way to address this would be to drop the variable(s) with the largest vif value.
+
 ```{r}
-# ░░███╗░░░█████╗░
-# ░████║░░██╔══██╗
-# ██╔██║░░██║░░██║
+# ░░███╗░░░█████╗░Check your model for multicollinearity
+# ░████║░░██╔══██╗What steps would you take to correct 
+# ██╔██║░░██║░░██║multicollinearity if it exists?
 # ╚═╝██║░░██║░░██║
 # ███████╗╚█████╔╝
 # ╚══════╝░╚════╝░
-# Check your model for multicollinearity and report your findings. What steps would you take to correct multicollinearity if it exists?
+vif(myfit)
 sqrt(vif(myfit)) > 2
 ```
 
+The plot below built with the `influencePlot()` function from the car library captures outliers, high leverage points, and influential observations all in one-go. Circles are proportional to influence, where the bigger the circle the larger the influence. The horizontal axis is used to identify high-leverage points, and the vertical axis is used to identify outliers. 
+
+Observations 2181 and 1499 have been marked as influential. Examining them below yields hugely disproportionate values for `GrLivArea` with values at or under the mean `SalePrice`. Given this, I will opt to drop these values as they appear to influence the model and may have resulted from errors in data collection. 
+
 ```{r}
-# ░░███╗░░░░███╗░░
-# ░████║░░░████║░░
+# ░░███╗░░░░███╗░░Check your model for outliers and report your findings.
+# ░████║░░░████║░░Should these observations be removed from the model?
 # ██╔██║░░██╔██║░░
 # ╚═╝██║░░╚═╝██║░░
 # ███████╗███████╗
 # ╚══════╝╚══════╝
-# Check your model for outliers and report your findings. Should these observations be removed from the model?
 influencePlot(myfit)
+
+select(ames_numeric[2181,], `SalePrice`, names(top3.cor))
+select(ames_numeric[1499,], `SalePrice`, names(top3.cor))
+mean(ames_numeric$`Gr Liv Area`)
+mean(ames_numeric$SalePrice)
 ```
 
+In my first attempt to improve the model, I will drop influential obersvations and add a quadratic term to the `Overall Qual` predictor. Below, the `gvlma()` function provides a quick glance at whether or not model assumptions have been met, and we will run this before and after making changes to the model.
+
 ```{r}
-# ░░███╗░░██████╗░
-# ░████║░░╚════██╗
-# ██╔██║░░░░███╔═╝
+# ░░███╗░░██████╗░Attempt to correct any issues that you have discovered
+# ░████║░░╚════██╗in your model. Did your changes improve 
+# ██╔██║░░░░███╔═╝the model, why or why not?
 # ╚═╝██║░░██╔══╝░░
 # ███████╗███████╗
 # ╚══════╝╚══════╝
-# Attempt to correct any issues that you have discovered in your model. Did your changes improve the model, why or why not?
+# Most model assumptions not met PRIOR to adjusting model
 gvlma(myfit)
+
+# Dropping influential values
+ames_numeric.drop.influential <- ames_numeric[-c(2181, 1499),]
+# Adding quadratic term to Overall Qual
+myfit2 <- lm(`SalePrice` ~ . + I(`Overall Qual`^2), 
+            select(ames_numeric.drop.influential, `SalePrice`, names(top3.cor)))
+# Improved Adjusted R-squared
+summary(myfit2)
+# Improved Residuals vs. Fitted plot
+plot(myfit2, which = 1)
+
+# Most model assumptions still not met AFTER to adjusting model
+gvlma(myfit2)
 ```
 
+The all subsets regression method plotted shows that the intercept and all three predictor variables are required to produce the highest adjusted r-squared value of 0.77. Thus, it is best to keep the three predictor variables as is to produce the best model possible.
+
 ```{r}
-# ░░███╗░░██████╗░
-# ░████║░░╚════██╗
+# ░░███╗░░██████╗░Use the all subsets regression method to identify the
+# ░████║░░╚════██╗"best" model. State the preferred model in equation form.
 # ██╔██║░░░█████╔╝
 # ╚═╝██║░░░╚═══██╗
 # ███████╗██████╔╝
 # ╚══════╝╚═════╝░
-# Use the all subsets regression method to identify the "best" model. State the preferred model in equation form.
-
-myleaps <- regsubsets(`SalePrice`~., 
-                      data = select(ames_numeric, `SalePrice`, names(SalePrice.top3.cor)),
-                      nbest = 1)
+myleaps <- regsubsets(`SalePrice` ~ ., 
+                      data = select(ames_numeric.drop.influential, 
+                                    `SalePrice`, names(top3.cor)),
+                      nbest = 4)
 summary(myleaps)
 plot(myleaps, scale = "adjr2")
-  
-  # , data, nbest) + plot(leaps, scale=“adjr2”) to compare all subsets, preferred over stepwise so long as compute time is not an issue as it’ll compare all possible models
-
 ```
 
+---
+
+## Conclusion/Interpretations
+
+By dropping influential observations and adding a quadratic term, I was able to slightly improve the model's adjusted r-squared value from 0.7532 to 0.8057. Given this, I prefer the latter model as it explains more variance in the data and thus has greater predictive capabilities. The `AIC()` function is great for comparing a couple of models against one-another, and below I have demonstrated that `myfit2` indeed has the lower AIC score and thus is a better model.
+
 ```{r}
-# ░░███╗░░░░██╗██╗
-# ░████║░░░██╔╝██║
-# ██╔██║░░██╔╝░██║
+# ░░███╗░░░░██╗██╗Compare the preferred model from step 13 with 
+# ░████║░░░██╔╝██║your model from step 12. 
+# ██╔██║░░██╔╝░██║How do they differ? Which model do you prefer and why?
 # ╚═╝██║░░███████║
 # ███████╗╚════██║
 # ╚══════╝░░░░░╚═╝
-# Compare the preferred model from step 13 with your model from step 12. How do they differ? Which model do you prefer and why?
+AIC(myfit, myfit2)
 ```
+
+For next steps, I would recommend including more variables in the linear regression by recoding those that were initially dropped due to not being numeric. Furthermore, I would attempt to ensure that all model assumptions have been met through further exploration of significant values that may need to be dropped or altered.
+
+---
+
+## References
+
